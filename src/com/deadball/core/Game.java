@@ -11,6 +11,7 @@ import com.deadball.entities.*;
 import com.deadball.ui.HUD;
 import com.deadball.utils.GameConstants;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -25,8 +26,15 @@ public class Game {
     private Goalkeeper goalkeeper;
     private Goal goal;
     private HUD hud;
-    /** Per-level aim / outcome tracking used by adaptive keeper and HUD heatmap. */
+    /** Per-level aim / outcome tracking (HUD heatmap; resets each level). */
     private final ShotHistory shotHistory = new ShotHistory();
+    /**
+     * All shots in the current campaign (levels 1–3). Never cleared between levels; reset on
+     * {@link #startNewGame()}. Level 3 adaptive keeper biases dives from this, not {@link #shotHistory}.
+     */
+    private final ShotHistory campaignShotMemory = new ShotHistory();
+    /** Per-level counts of where the keeper dove: left / center / right (index 0,1,2). Heatmap. */
+    private final int[] keeperDivesThisLevel = new int[3];
     /** Player pressure 0..1. Rises on saves/misses, falls on goals, reset per level. */
     private double pressure;
     /** Sum of goals scored across all completed levels in the current campaign run. */
@@ -81,6 +89,7 @@ public class Game {
     public void startNewGame() {
         currentLevel = 1;
         campaignGoalTotal = 0;
+        campaignShotMemory.clear();
         hud.reset();
         startLevel(currentLevel);
     }
@@ -101,8 +110,9 @@ public class Game {
         hud.setCurrentRound(currentRound);
         hud.setLevel(currentLevel, GameConstants.LEVEL_COUNT);
 
-        // Fresh history each level so adaptive keeper (L3) learns from this level's shots.
+        // Per-level heatmap only; L3 keeper uses {@link #campaignShotMemory} across all levels.
         shotHistory.clear();
+        Arrays.fill(keeperDivesThisLevel, 0);
         pressure = 0.0;
 
         // Per-level keeper tuning: reach multiplier is level-driven, probabilities only get
@@ -324,18 +334,17 @@ public class Game {
         ball.launch(targetX, targetY, power, wasAimedInsideGoalFrame(targetX, targetY));
         sound.play(SoundManager.Clip.KICK);
 
-        // Adaptive keeper (L3): bias dive probabilities toward the zones the player has favoured
-        // so far this level. Earlier levels keep the baseline distribution.
-        if (currentLevel >= 3 && shotHistory.totalShots() > 0) {
+        // Adaptive keeper (L3): bias from every shot this campaign (L1 + L2 + earlier L3 rounds).
+        if (currentLevel >= 3 && campaignShotMemory.totalShots() > 0) {
             double w = Math.min(1.0,
-                    shotHistory.totalShots() / (double) GameConstants.KEEPER_ADAPTIVE_RAMP_SHOTS)
+                    campaignShotMemory.totalShots() / (double) GameConstants.KEEPER_ADAPTIVE_RAMP_SHOTS)
                     * GameConstants.KEEPER_ADAPTIVE_BIAS;
             double left = (1.0 - w) * GameConstants.KEEPER_LEFT_PROBABILITY
-                    + w * shotHistory.shareOfShots(ShotHistory.Zone.LEFT);
+                    + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.LEFT);
             double center = (1.0 - w) * GameConstants.KEEPER_CENTER_PROBABILITY
-                    + w * shotHistory.shareOfShots(ShotHistory.Zone.CENTER);
+                    + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.CENTER);
             double right = (1.0 - w) * GameConstants.KEEPER_RIGHT_PROBABILITY
-                    + w * shotHistory.shareOfShots(ShotHistory.Zone.RIGHT);
+                    + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.RIGHT);
             goalkeeper.setDiveProbabilities(left, center, right);
         } else {
             goalkeeper.resetProbabilitiesToBaseline();
@@ -375,6 +384,11 @@ public class Game {
         pressure = Math.max(0.0, Math.min(1.0, pressure));
 
         shotHistory.record(lastShotAimX, countsAsGoal);
+        campaignShotMemory.record(lastShotAimX, countsAsGoal);
+
+        int dive = goalkeeper.getCurrentDiveDirection();
+        int z = dive == -1 ? 0 : dive == 0 ? 1 : 2;
+        keeperDivesThisLevel[z]++;
 
         hud.showResultMessage(lastResultMessage, 2.0);
     }
@@ -461,13 +475,13 @@ public class Game {
             gc.clearRect(0, 0, w, h);
             hud.render(gc);
             if ("AIM".equals(gamePhase)) {
-                renderAimHeatmap(gc);
+                renderKeeperDiveHeatmap(gc);
             }
         } else if (gameState.equals(GameConstants.STATE_LEVEL_COMPLETE)) {
             gc.clearRect(0, 0, w, h);
             hud.render(gc);
             renderLevelBanner(gc, "LEVEL " + currentLevel + " COMPLETE!",
-                    Color.GOLD,
+                    Color.web(GameConstants.HUD_SUCCESS),
                     "Next: " + GameConstants.levelDescription(currentLevel + 1));
         } else if (gameState.equals(GameConstants.STATE_LEVEL_FAILED)) {
             gc.clearRect(0, 0, w, h);
@@ -499,15 +513,9 @@ public class Game {
     }
     
     private void renderMenu(GraphicsContext gc) {
-        // Clear
         gc.setFill(Color.web("#003300"));
         gc.fillRect(0, 0, GameConstants.SCREEN_WIDTH, GameConstants.SCREEN_HEIGHT);
-        
-        // Stadium background effect
-        gc.setFill(Color.web("#1a1a1a"));
-        gc.fillRect(0, GameConstants.SCREEN_HEIGHT * 0.6,
-                   GameConstants.SCREEN_WIDTH, GameConstants.SCREEN_HEIGHT * 0.4);
-        
+
         // Title
         gc.setFill(Color.WHITE);
         gc.setFont(javafx.scene.text.Font.font("Arial", 64));
@@ -534,7 +542,7 @@ public class Game {
         }
 
         gc.setFont(javafx.scene.text.Font.font("Arial", 16));
-        gc.setFill(Color.web("#ffdd55"));
+        gc.setFill(Color.web(GameConstants.HUD_ACCENT));
         gc.fillText("High Score: " + highScore.getBestCampaignGoals() + " goals (campaign)",
                 GameConstants.SCREEN_WIDTH / 2.0, ly + 10);
 
@@ -571,7 +579,7 @@ public class Game {
 
         gc.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
         gc.setFont(javafx.scene.text.Font.font("Arial", 56));
-        gc.setFill(Color.GOLD);
+        gc.setFill(Color.web(GameConstants.HUD_SUCCESS));
         gc.fillText("CAMPAIGN COMPLETE!", GameConstants.SCREEN_WIDTH / 2.0,
                 GameConstants.SCREEN_HEIGHT / 2.0 - 100);
 
@@ -588,7 +596,7 @@ public class Game {
 
         gc.setFont(javafx.scene.text.Font.font("Arial", 22));
         if (lastCampaignWasNewHighScore) {
-            gc.setFill(Color.web("#ffd34d"));
+            gc.setFill(Color.web(GameConstants.HUD_ACCENT_SOFT));
             gc.fillText("NEW HIGH SCORE!",
                     GameConstants.SCREEN_WIDTH / 2.0,
                     GameConstants.SCREEN_HEIGHT / 2.0 + 70);
@@ -612,52 +620,49 @@ public class Game {
     }
 
     /**
-     * Draws a three-zone strip near the top showing how many shots this level landed in the
-     * left / center / right third of the goal. Darker means fewer shots, brighter red means a
-     * zone the player has favoured (and that the L3 keeper will read against them).
+     * Keeper dive distribution this level (left / center / right). Opaque panel so it stays
+     * readable over the 3D pitch; semi-transparent fills blended into grass and disappeared.
      */
-    private void renderAimHeatmap(GraphicsContext gc) {
-        int boxW = 90;
-        int boxH = 26;
-        int gap = 4;
+    private void renderKeeperDiveHeatmap(GraphicsContext gc) {
+        int boxW = 116;
+        int boxH = 40;
+        int gap = 8;
         int totalW = boxW * 3 + gap * 2;
         int startX = (GameConstants.SCREEN_WIDTH - totalW) / 2;
-        int y = 108;
+        int y = 118;
+
+        int total = keeperDivesThisLevel[0] + keeperDivesThisLevel[1] + keeperDivesThisLevel[2];
+        String[] labels = { "LEFT", "CENTER", "RIGHT" };
 
         gc.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
-        gc.setFont(javafx.scene.text.Font.font("Arial", 11));
-        gc.setFill(Color.web("#c8c8c8"));
-        gc.fillText("AIM HISTORY (this level)",
-                GameConstants.SCREEN_WIDTH / 2.0, y - 4);
+        gc.setFill(Color.rgb(22, 28, 34, 0.94));
+        gc.fillRoundRect(startX - 14, y - 22, totalW + 28, boxH + 46, 10, 10);
 
-        ShotHistory.Zone[] zones = {
-                ShotHistory.Zone.LEFT,
-                ShotHistory.Zone.CENTER,
-                ShotHistory.Zone.RIGHT };
-        String[] labels = { "LEFT", "CENTER", "RIGHT" };
-        int totalShots = shotHistory.totalShots();
+        gc.setFont(javafx.scene.text.Font.font("Arial", 12));
+        gc.setFill(Color.web("#e8e8e8"));
+        gc.fillText("KEEPER DIVES (this level) — total " + total,
+                GameConstants.SCREEN_WIDTH / 2.0, y - 7);
 
+        int innerTop = y + 6;
         for (int i = 0; i < 3; i++) {
             int x = startX + i * (boxW + gap);
-            int shots = shotHistory.shotsIn(zones[i]);
-            int goals = shotHistory.goalsIn(zones[i]);
-            double intensity = totalShots == 0 ? 0.0 : (double) shots / totalShots;
-            // Base grey -> saturated red as intensity rises.
-            int r = (int) (60 + 195 * intensity);
-            int g = (int) (60 + 20 * (1 - intensity));
-            int b = (int) (70 + 30 * (1 - intensity));
-            gc.setFill(Color.rgb(r, g, b, 0.85));
-            gc.fillRect(x, y + 4, boxW, boxH);
-            gc.setStroke(Color.web("#111111"));
-            gc.setLineWidth(1);
-            gc.strokeRect(x, y + 4, boxW, boxH);
+            int dives = keeperDivesThisLevel[i];
+            double intensity = total == 0 ? 0.0 : (double) dives / total;
+            int r = (int) (55 + 200 * intensity);
+            int gv = (int) (55 + 25 * (1 - intensity));
+            int b = (int) (60 + 35 * (1 - intensity));
+            gc.setFill(Color.rgb(r, gv, b));
+            gc.fillRect(x, innerTop, boxW, boxH);
+            gc.setStroke(Color.web("#f0f0f0"));
+            gc.setLineWidth(1.5);
+            gc.strokeRect(x, innerTop, boxW, boxH);
 
             gc.setFill(Color.WHITE);
+            gc.setFont(javafx.scene.text.Font.font("Arial", 12));
+            gc.fillText(labels[i], x + boxW / 2.0, innerTop + 18);
             gc.setFont(javafx.scene.text.Font.font("Arial", 11));
-            gc.fillText(labels[i], x + boxW / 2.0, y + 16);
-            gc.setFont(javafx.scene.text.Font.font("Arial", 10));
-            gc.setFill(Color.web("#ffe29a"));
-            gc.fillText(goals + " / " + shots, x + boxW / 2.0, y + 28);
+            gc.setFill(Color.web(GameConstants.HUD_ACCENT_SOFT));
+            gc.fillText(dives + " dive" + (dives == 1 ? "" : "s"), x + boxW / 2.0, innerTop + 34);
         }
     }
 

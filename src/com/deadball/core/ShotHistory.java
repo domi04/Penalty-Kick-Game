@@ -3,9 +3,9 @@ package com.deadball.core;
 import com.deadball.utils.GameConstants;
 
 /**
- * Tracks where the player has aimed and whether the shot scored during the current level.
- * The adaptive goalkeeper (level 3) and the aim-zone heatmap both read from this. Zones are
- * classified by the locked aim X (what the human actually chose), not by where the ball landed.
+ * Tracks where the player aimed and whether the shot scored (by locked aim X).
+ * {@link com.deadball.core.Game} uses one instance per level (heatmap) and one for full-campaign
+ * memory (level 3 adaptive keeper). Zones use the aim thirds of the goal, not ball landing.
  */
 public class ShotHistory {
     public enum Zone { LEFT, CENTER, RIGHT }

@@ -6,18 +6,26 @@ import com.deadball.entities.Goalkeeper;
 import com.deadball.entities.Player;
 import com.deadball.utils.GameConstants;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+
 import javafx.geometry.Point3D;
 import javafx.scene.AmbientLight;
 import javafx.scene.DepthTest;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.PointLight;
+import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Box;
 import javafx.scene.shape.CullFace;
 import javafx.scene.shape.Sphere;
-import javafx.scene.transform.Rotate;
 
 /**
  * JavaFX 3D pitch: camera behind the penalty spot looking at the goal.
@@ -37,17 +45,33 @@ public class GameScene3D {
     private static final double RETICLE_Z_IN_FRONT = 28.0;
     /** Ball resting height at the penalty spot (matches previous ball mesh offset). */
     private static final double BALL_REST_WORLD_Y = -1.15;
+    /** World-space height for keeper billboard sprites (width follows image aspect). */
+    private static final double KEEPER_SPRITE_HEIGHT = 20.0;
+    /**
+     * Vertical anchor for the whole keeper group. Negative Y pulls the figure down toward the goal
+     * line (sprites at {@code translateY(0)} sat above the ball / mouth; PNG padding also lifts feet).
+     */
+    private static final double KEEPER_ANCHOR_Y = 3.50;
+    /** Thin billboards in XY; camera faces roughly from −Z toward +Z. */
+    private static final double BILLBOARD_DEPTH = 0.1;
+    /** Crowd panorama width in world units (smaller than full-sky width so it doesn’t dominate). */
+    private static final double CROWD_STRIP_WIDTH = 240;
 
     private final Group root;
-    private final Sphere ballMesh;
+    /** Textured billboard or fallback {@link Sphere} inside a {@link Group}. */
+    private final Node ballNode;
     private final Group keeperGroup;
+    private final Box keeperSprite;
+    private final PhongMaterial keeperMaterial;
+    private final Image imgKeeperStand;
+    private final Image imgKeeperJumpLeft;
+    private final Image imgKeeperJumpRight;
     private final Group playerGroup;
     private final Group goalGroup;
     private final Group reticleGroup;
     private Box netBox;
     private PhongMaterial netMaterial;
     private PhongMaterial netFlashMaterial;
-    private final Rotate keeperTilt = new Rotate(0, Rotate.Z_AXIS);
 
     public GameScene3D() {
         root = new Group();
@@ -82,25 +106,32 @@ public class GameScene3D {
         sky.setTranslateY(-115);
         sky.setTranslateZ(Z_AT_GOAL + 55);
 
-        // Dark stand / crowd strip sandwiched between the sky and the pitch behind the goal.
-        Box crowd = new Box(400, 40, 2);
-        PhongMaterial crowdMat = new PhongMaterial(Color.web("#1b2736"));
-        crowdMat.setSpecularColor(Color.web("#334458"));
-        crowd.setMaterial(crowdMat);
-        crowd.setTranslateY(-5);
-        crowd.setTranslateZ(Z_AT_GOAL + 50);
-        skyTint.getChildren().addAll(sky, crowd);
+        Image imgCrowd = loadSprite("crowd.png");
+        Node crowdStrip = buildCrowdStrip(imgCrowd);
+        skyTint.getChildren().addAll(sky, crowdStrip);
 
         goalGroup = buildGoal();
         goalGroup.setTranslateZ(Z_AT_GOAL);
 
-        ballMesh = new Sphere(1.15);
-        PhongMaterial ballMat = new PhongMaterial(Color.BLACK);
-        ballMat.setSpecularColor(Color.GRAY);
-        ballMesh.setMaterial(ballMat);
+        Image imgBall = loadSprite("ball.png");
+        ballNode = buildBallNode(imgBall);
 
-        keeperGroup = buildKeeperBody();
-        keeperGroup.getTransforms().add(keeperTilt);
+        imgKeeperStand = loadSprite("keeper_standing.png");
+        imgKeeperJumpLeft = loadSprite("keeper_jumping_left.png");
+        imgKeeperJumpRight = loadSprite("keeper_jumping_right.png");
+        keeperMaterial = new PhongMaterial(Color.WHITE);
+        keeperMaterial.setSpecularColor(Color.gray(0.2));
+        keeperSprite = new Box(10, KEEPER_SPRITE_HEIGHT, BILLBOARD_DEPTH);
+        keeperSprite.setMaterial(keeperMaterial);
+        keeperGroup = new Group(keeperSprite);
+        Image keeper0 = firstNonNullKeeperImage();
+        if (keeper0 != null) {
+            keeperMaterial.setDiffuseMap(keeper0);
+            layoutKeeperBillboard(keeper0);
+        } else {
+            keeperMaterial.setDiffuseColor(Color.web("#E85D04"));
+        }
+
         playerGroup = buildStrikerBody();
         reticleGroup = buildAimReticle();
         reticleGroup.setDepthTest(DepthTest.DISABLE);
@@ -113,7 +144,7 @@ public class GameScene3D {
 
         // Reticle after keeper (not hidden by keeper depth) but before ball (shot stays visible).
         root.getChildren().addAll(skyTint, ground, mowingStripes, goalGroup, keeperGroup,
-                reticleGroup, playerGroup, ballMesh, ambient, sun);
+                reticleGroup, playerGroup, ballNode, ambient, sun);
     }
 
     private Group buildAimReticle() {
@@ -173,23 +204,6 @@ public class GameScene3D {
         return g;
     }
 
-    private Group buildKeeperBody() {
-        Group g = new Group();
-        PhongMaterial kit = new PhongMaterial(Color.web("#E85D04"));
-        PhongMaterial head = new PhongMaterial(Color.web("#C65A00"));
-
-        Box torso = new Box(5.5, 9, 2.2);
-        torso.setMaterial(kit);
-        torso.setTranslateY(-5);
-
-        Sphere headS = new Sphere(2.2);
-        headS.setMaterial(head);
-        headS.setTranslateY(-11);
-
-        g.getChildren().addAll(torso, headS);
-        return g;
-    }
-
     private Group buildStrikerBody() {
         Group g = new Group();
         PhongMaterial kit = new PhongMaterial(Color.web("#1e3a8a"));
@@ -205,6 +219,152 @@ public class GameScene3D {
 
         g.getChildren().addAll(torso, headS);
         return g;
+    }
+
+    /**
+     * Ball uses a textured {@link Sphere} so the PNG maps naturally; a thin {@link Box} billboard
+     * often mapped the wrong face/UVs from this camera angle. Falls back to a solid sphere if load fails.
+     */
+    private static Group buildBallNode(Image imgBall) {
+        Group g = new Group();
+        Sphere s = new Sphere(1.15);
+        PhongMaterial m = new PhongMaterial();
+        if (imgBall != null && !imgBall.isError()) {
+            m.setDiffuseColor(Color.WHITE);
+            m.setDiffuseMap(imgBall);
+            m.setSpecularColor(Color.rgb(180, 180, 180));
+            m.setSpecularPower(24);
+        } else {
+            m.setDiffuseColor(Color.BLACK);
+            m.setSpecularColor(Color.GRAY);
+        }
+        s.setMaterial(m);
+        g.getChildren().add(s);
+        return g;
+    }
+
+    /**
+     * Wide billboard behind the goal; same placement as the old grey strip. Height follows
+     * {@code crowd.png} aspect ratio; falls back to a solid box if the file is missing.
+     */
+    private static Node buildCrowdStrip(Image imgCrowd) {
+        final double stripWidth = CROWD_STRIP_WIDTH;
+        final double y = -5;
+        final double z = Z_AT_GOAL + 50;
+        if (imgCrowd != null && !imgCrowd.isError()) {
+            double iw = imgCrowd.getWidth();
+            double ih = imgCrowd.getHeight();
+            double stripHeight = (iw > 0 && ih > 0) ? stripWidth * (ih / iw) : 40;
+
+            Group crowdGroup = new Group();
+            // Opaque plate behind the PNG so transparent areas read as dark (stand) instead of sky.
+            Box back = new Box(stripWidth, stripHeight, 0.3);
+            PhongMaterial backMat = new PhongMaterial(Color.web("#151518"));
+            backMat.setSpecularColor(Color.BLACK);
+            back.setMaterial(backMat);
+            back.setTranslateY(y);
+            back.setTranslateZ(z + 0.22);
+
+            Box front = new Box(stripWidth, stripHeight, BILLBOARD_DEPTH);
+            PhongMaterial m = new PhongMaterial(Color.WHITE);
+            m.setDiffuseMap(imgCrowd);
+            m.setSpecularColor(Color.gray(0.15));
+            front.setMaterial(m);
+            front.setTranslateY(y);
+            front.setTranslateZ(z - 0.12);
+
+            crowdGroup.getChildren().addAll(back, front);
+            return crowdGroup;
+        }
+        Box crowd = new Box(CROWD_STRIP_WIDTH, 24, 2);
+        PhongMaterial crowdMat = new PhongMaterial(Color.web("#1b2736"));
+        crowdMat.setSpecularColor(Color.web("#334458"));
+        crowd.setMaterial(crowdMat);
+        crowd.setTranslateY(y);
+        crowd.setTranslateZ(z);
+        return crowd;
+    }
+
+    /**
+     * Locates {@code assets/sprites/&lt;fileName&gt;} whether the process cwd is the project root,
+     * an IDE "run" folder, or a parent directory (common when working directory is not {@code code/}).
+     */
+    private static Path resolveSpriteFile(String fileName) {
+        Path tail = Paths.get("assets", "sprites", fileName);
+        List<Path> candidates = new ArrayList<>();
+        Path cwd = Paths.get(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        candidates.add(cwd.resolve(tail));
+        candidates.add(tail.toAbsolutePath().normalize());
+        Path walk = cwd;
+        for (int i = 0; i < 5 && walk != null; i++) {
+            candidates.add(walk.resolve(tail));
+            candidates.add(walk.resolve("code").resolve("assets").resolve("sprites").resolve(fileName));
+            walk = walk.getParent();
+        }
+        for (Path p : candidates) {
+            try {
+                Path n = p.normalize();
+                if (Files.isRegularFile(n)) {
+                    return n;
+                }
+            } catch (RuntimeException ignored) {
+                // invalid path on some platforms
+            }
+        }
+        return null;
+    }
+
+    private static Image loadSprite(String fileName) {
+        Path path = resolveSpriteFile(fileName);
+        if (path == null) {
+            return null;
+        }
+        try (InputStream in = Files.newInputStream(path)) {
+            Image im = new Image(in);
+            return im.isError() ? null : im;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private Image firstNonNullKeeperImage() {
+        Image[] imgs = { imgKeeperStand, imgKeeperJumpLeft, imgKeeperJumpRight };
+        for (Image im : imgs) {
+            if (im != null && !im.isError()) {
+                return im;
+            }
+        }
+        return null;
+    }
+
+    private void layoutKeeperBillboard(Image tex) {
+        if (tex == null || tex.isError()) {
+            return;
+        }
+        double th = tex.getHeight();
+        if (th < 1.0) {
+            return;
+        }
+        double tw = tex.getWidth();
+        double h = KEEPER_SPRITE_HEIGHT;
+        double w = h * (tw / th);
+        keeperSprite.setWidth(w);
+        keeperSprite.setHeight(h);
+        keeperSprite.setDepth(BILLBOARD_DEPTH);
+        keeperSprite.setTranslateY(-h / 2.0);
+    }
+
+    private void updateKeeperSprite(int diveDirection) {
+        Image tex = diveDirection == -1 ? imgKeeperJumpLeft
+                : diveDirection == 1 ? imgKeeperJumpRight : imgKeeperStand;
+        if (tex == null || tex.isError()) {
+            tex = imgKeeperStand;
+        }
+        if (tex != null && !tex.isError()) {
+            keeperMaterial.setDiffuseMap(tex);
+            keeperMaterial.setDiffuseColor(Color.WHITE);
+            layoutKeeperBillboard(tex);
+        }
     }
 
     private static double worldX(double posX) {
@@ -283,14 +443,14 @@ public class GameScene3D {
         double bx = swx + t * (ewx - swx);
         double by = swy + t * (ewy - swy);
         double bz = swz + t * (ewz - swz);
-        placeOnGround(ballMesh, bx, bz, by);
+        placeOnGround(ballNode, bx, bz, by);
     }
 
     public void sync(Game game) {
         String state = game.getGameState();
         boolean menu = GameConstants.STATE_MENU.equals(state);
 
-        ballMesh.setVisible(!menu);
+        ballNode.setVisible(!menu);
         playerGroup.setVisible(!menu);
         keeperGroup.setVisible(!menu);
         goalGroup.setVisible(!menu);
@@ -314,7 +474,7 @@ public class GameScene3D {
         if (ball.hasShotRay()) {
             placeBallAlongShotRay(ball);
         } else {
-            placeOnGround(ballMesh, worldX(ball.getPosX()), worldZBall(ball.getPosY()), BALL_REST_WORLD_Y);
+            placeOnGround(ballNode, worldX(ball.getPosX()), worldZBall(ball.getPosY()), BALL_REST_WORLD_Y);
         }
 
         Player player = game.getPlayer();
@@ -330,9 +490,8 @@ public class GameScene3D {
         } else if (dive == 1) {
             kx += GameConstants.KEEPER_DIVE_SHIFT_X;
         }
-        placeOnGround(keeperGroup, worldX(kx), worldZ(k.getPosY()), 0);
-        // Tilt keeper torso toward dive side (positive Z rotation leans screen-right).
-        keeperTilt.setAngle(dive * 35.0);
+        placeOnGround(keeperGroup, worldX(kx), worldZ(k.getPosY()), KEEPER_ANCHOR_Y);
+        updateKeeperSprite(dive);
 
         netBox.setMaterial(game.getGoal().isNetFlashVisible() ? netFlashMaterial : netMaterial);
     }

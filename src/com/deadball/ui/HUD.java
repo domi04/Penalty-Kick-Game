@@ -91,7 +91,7 @@ public class HUD {
         // Level + round indicator (top left)
         gc.setFont(Font.font("Arial", 16));
         gc.setTextAlign(TextAlignment.LEFT);
-        gc.setFill(Color.web("#ffdd55"));
+        gc.setFill(Color.web(GameConstants.HUD_ACCENT));
         gc.fillText("Level " + currentLevel + " / " + levelCount, 20, 40);
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("Arial", 13));
@@ -140,21 +140,21 @@ public class HUD {
             barColor = Color.web("#FFAA00");
         }
         if (powerBarValue > 0.85) {
-            barColor = Color.web("#FFFF00"); // Sweet spot
+            barColor = Color.web(GameConstants.HUD_ACCENT_SOFT);
         }
         
         gc.setFill(barColor);
         gc.fillRect(barX + 2, barY + barHeight - fillHeight, barWidth - 4, fillHeight);
         
         // Sweet spot indicator (top region)
-        gc.setStroke(Color.YELLOW);
+        gc.setStroke(Color.web(GameConstants.HUD_ACCENT));
         gc.setLineWidth(2);
         double sweetSpotStart = barY + barHeight * 0.2;
         gc.strokeLine(barX, sweetSpotStart, barX + barWidth, sweetSpotStart);
-        gc.setFill(Color.YELLOW);
+        gc.setFill(Color.web(GameConstants.HUD_ACCENT_SOFT));
         gc.setFont(Font.font("Arial", 8));
         gc.setTextAlign(TextAlignment.LEFT);
-        gc.fillText("Sweet Spot", barX + 32, sweetSpotStart - 5);
+        gc.fillText("Sweet Spot", barX + 34, sweetSpotStart - 5);
     }
     
     private void drawPressureMeter(GraphicsContext gc) {
@@ -174,7 +174,7 @@ public class HUD {
         if (pressure < 0.33) {
             fill = Color.web("#4cd47a"); // calm green
         } else if (pressure < 0.66) {
-            fill = Color.web("#e8c33a"); // tense amber
+            fill = Color.web("#e88850"); // tense (orange, not yellow)
         } else {
             fill = Color.web("#e85050"); // panic red
         }
@@ -217,10 +217,10 @@ public class HUD {
                 }
             } else if (i == currentRound - 1) {
                 // Current round
-                gc.setStroke(Color.YELLOW);
+                gc.setStroke(Color.web(GameConstants.HUD_ACCENT));
                 gc.setLineWidth(3);
                 gc.strokeOval(x - 12, iconY - 12, 24, 24);
-                gc.setFill(Color.YELLOW);
+                gc.setFill(Color.WHITE);
                 gc.fillText((i + 1) + "", x, iconY + 7);
             } else {
                 // Future round
@@ -242,7 +242,7 @@ public class HUD {
                    GameConstants.SCREEN_WIDTH, 120);
         
         if (resultMessage.contains("GOAL")) {
-            gc.setFill(Color.GOLD);
+            gc.setFill(Color.web(GameConstants.HUD_SUCCESS));
         } else if (resultMessage.contains("SAVED")) {
             gc.setFill(Color.web("#6ec8ff"));
         } else if (resultMessage.contains("POST")) {

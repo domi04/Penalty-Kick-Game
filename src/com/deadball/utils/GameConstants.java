@@ -100,6 +100,12 @@ public interface GameConstants {
     /** How long the LEVEL_COMPLETE banner is shown before advancing (seconds). */
     double LEVEL_TRANSITION_SECONDS = 2.5;
 
+    /** Primary HUD/menu accent (replaces former yellow highlights). */
+    String HUD_ACCENT = "#7ec8ff";
+    String HUD_ACCENT_SOFT = "#b8e4ff";
+    /** Victory / GOAL-style highlights (avoids gold). */
+    String HUD_SUCCESS = "#6ed4a8";
+
     /** Short one-line description of each level (shown on the menu and level transitions). */
     static String levelDescription(int level) {
         switch (level) {
