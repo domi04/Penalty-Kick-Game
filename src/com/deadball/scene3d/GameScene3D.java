@@ -56,6 +56,8 @@ public class GameScene3D {
     private static final double BILLBOARD_DEPTH = 0.1;
     /** Crowd panorama width in world units (smaller than full-sky width so it doesn’t dominate). */
     private static final double CROWD_STRIP_WIDTH = 240;
+    /** Textured penalty-taker sprite height; width follows {@code player.png} aspect. */
+    private static final double PLAYER_SPRITE_HEIGHT = 17.0;
 
     private final Group root;
     /** Textured billboard or fallback {@link Sphere} inside a {@link Group}. */
@@ -132,7 +134,8 @@ public class GameScene3D {
             keeperMaterial.setDiffuseColor(Color.web("#E85D04"));
         }
 
-        playerGroup = buildStrikerBody();
+        Image imgPlayer = loadSprite("player.png");
+        playerGroup = buildPlayerStriker(imgPlayer);
         reticleGroup = buildAimReticle();
         reticleGroup.setDepthTest(DepthTest.DISABLE);
 
@@ -204,7 +207,29 @@ public class GameScene3D {
         return g;
     }
 
-    private Group buildStrikerBody() {
+    /**
+     * {@code player.png} on a thin billboard; falls back to the old block/torso + sphere if missing.
+     */
+    private static Group buildPlayerStriker(Image imgPlayer) {
+        if (imgPlayer == null || imgPlayer.isError()) {
+            return buildStrikerFallback();
+        }
+        Group g = new Group();
+        double tw = imgPlayer.getWidth();
+        double th = imgPlayer.getHeight();
+        double h = PLAYER_SPRITE_HEIGHT;
+        double w = th > 0 && tw > 0 ? h * (tw / th) : h * 0.55;
+        Box b = new Box(w, h, BILLBOARD_DEPTH);
+        PhongMaterial m = new PhongMaterial(Color.WHITE);
+        m.setDiffuseMap(imgPlayer);
+        m.setSpecularColor(Color.gray(0.25));
+        b.setMaterial(m);
+        b.setTranslateY(-h / 2.0);
+        g.getChildren().add(b);
+        return g;
+    }
+
+    private static Group buildStrikerFallback() {
         Group g = new Group();
         PhongMaterial kit = new PhongMaterial(Color.web("#1e3a8a"));
         PhongMaterial skin = new PhongMaterial(Color.web("#d4a574"));

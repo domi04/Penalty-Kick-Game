@@ -1,6 +1,5 @@
 package com.deadball.entities;
 
-import javafx.scene.canvas.GraphicsContext;
 import com.deadball.utils.GameConstants;
 
 public class Goal {
@@ -37,9 +36,5 @@ public class Goal {
         } else {
             flashNet = false;
         }
-    }
-    
-    public void render(GraphicsContext gc) {
-        // Drawn by JavaFX 3D SubScene
     }
 }

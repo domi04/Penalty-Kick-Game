@@ -3,56 +3,35 @@ package com.deadball.core;
 import com.deadball.utils.GameConstants;
 
 /**
- * Tracks where the player aimed and whether the shot scored (by locked aim X).
- * {@link com.deadball.core.Game} uses one instance per level (heatmap) and one for full-campaign
- * memory (level 3 adaptive keeper). Zones use the aim thirds of the goal, not ball landing.
+ * Counts where the player aimed (by locked aim X) into goal-mouth thirds. The level 3 adaptive
+ * keeper uses a campaign-wide instance; zones use the aim line, not where the ball lands.
  */
 public class ShotHistory {
     public enum Zone { LEFT, CENTER, RIGHT }
 
     private final int[] shotsByZone = new int[3];
-    private final int[] goalsByZone = new int[3];
     private int totalShots;
-    private int totalGoals;
 
-    /** Wipe all tracking (called when a new level starts). */
     public void clear() {
         for (int i = 0; i < 3; i++) {
             shotsByZone[i] = 0;
-            goalsByZone[i] = 0;
         }
         totalShots = 0;
-        totalGoals = 0;
     }
 
-    /** Add one shot to the history. {@code goal} is true only when it counted as a scored goal. */
-    public void record(double aimX, boolean goal) {
+    public void record(double aimX) {
         int z = zoneOf(aimX).ordinal();
         shotsByZone[z]++;
         totalShots++;
-        if (goal) {
-            goalsByZone[z]++;
-            totalGoals++;
-        }
-    }
-
-    public int shotsIn(Zone zone) {
-        return shotsByZone[zone.ordinal()];
-    }
-
-    public int goalsIn(Zone zone) {
-        return goalsByZone[zone.ordinal()];
     }
 
     public int totalShots() {
         return totalShots;
     }
 
-    public int totalGoals() {
-        return totalGoals;
-    }
-
-    /** Share of shots aimed into a zone (0..1). Returns uniform 1/3 when no shots are recorded. */
+    /**
+     * Share of shots aimed into a zone (0..1). Returns uniform 1/3 when no shots are recorded.
+     */
     public double shareOfShots(Zone zone) {
         if (totalShots == 0) {
             return 1.0 / 3.0;
@@ -60,7 +39,9 @@ public class ShotHistory {
         return (double) shotsByZone[zone.ordinal()] / totalShots;
     }
 
-    /** Classify an aim X into a goal-mouth third. Clamped so out-of-frame aims still pick a side. */
+    /**
+     * Classify an aim X into a goal-mouth third. Clamped so out-of-frame aims still pick a side.
+     */
     public static Zone zoneOf(double aimX) {
         double left = GameConstants.GOAL_LEFT;
         double right = GameConstants.GOAL_RIGHT;

@@ -1,7 +1,7 @@
 package com.deadball.entities;
 
-import javafx.scene.canvas.GraphicsContext;
 import com.deadball.utils.GameConstants;
+
 public class Ball extends Entity {
     private boolean inFlight;
     private double flightTime;
@@ -154,10 +154,5 @@ public class Ball extends Entity {
                 || posY > GameConstants.SCREEN_HEIGHT + 50) {
             inFlight = false;
         }
-    }
-
-    @Override
-    public void render(GraphicsContext gc) {
-        // Drawn by JavaFX 3D SubScene
     }
 }

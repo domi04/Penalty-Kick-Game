@@ -1,7 +1,5 @@
 package com.deadball.entities;
 
-import javafx.scene.canvas.GraphicsContext;
-
 public abstract class Entity {
     protected double posX;
     protected double posY;
@@ -14,8 +12,6 @@ public abstract class Entity {
         this.velocityX = 0.0;
         this.velocityY = 0.0;
     }
-    
-    public abstract void render(GraphicsContext gc);
     
     public abstract void update(double deltaTime);
     

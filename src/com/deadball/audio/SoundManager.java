@@ -35,7 +35,6 @@ public final class SoundManager {
     }
 
     private final Map<Clip, AudioClip> loaded = new EnumMap<>(Clip.class);
-    private boolean enabled = true;
 
     public SoundManager(Path assetsDir) {
         if (assetsDir != null && Files.isDirectory(assetsDir)) {
@@ -53,24 +52,9 @@ public final class SoundManager {
     }
 
     public void play(Clip clip) {
-        if (!enabled) {
-            return;
-        }
         AudioClip ac = loaded.get(clip);
         if (ac != null) {
             ac.play();
         }
-    }
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public boolean hasAnyLoaded() {
-        return !loaded.isEmpty();
     }
 }

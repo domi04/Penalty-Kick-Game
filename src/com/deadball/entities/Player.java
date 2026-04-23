@@ -1,6 +1,5 @@
 package com.deadball.entities;
 
-import javafx.scene.canvas.GraphicsContext;
 import com.deadball.utils.GameConstants;
 
 public class Player extends Entity {
@@ -70,10 +69,4 @@ public class Player extends Entity {
         double normalizedPhase = (powerPhase % period) / period;
         powerLevel = Math.abs(Math.sin(normalizedPhase * Math.PI));
     }
-    
-    @Override
-    public void render(GraphicsContext gc) {
-        // Drawn by JavaFX 3D SubScene
-    }
-    
 }

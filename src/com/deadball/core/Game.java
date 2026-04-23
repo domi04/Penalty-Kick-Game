@@ -11,7 +11,6 @@ import com.deadball.entities.*;
 import com.deadball.ui.HUD;
 import com.deadball.utils.GameConstants;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -26,15 +25,11 @@ public class Game {
     private Goalkeeper goalkeeper;
     private Goal goal;
     private HUD hud;
-    /** Per-level aim / outcome tracking (HUD heatmap; resets each level). */
-    private final ShotHistory shotHistory = new ShotHistory();
     /**
-     * All shots in the current campaign (levels 1–3). Never cleared between levels; reset on
-     * {@link #startNewGame()}. Level 3 adaptive keeper biases dives from this, not {@link #shotHistory}.
+     * Shots in the current campaign (levels 1–3), by aim zone. Never cleared between levels;
+     * reset on {@link #startNewGame()}. Level 3 adaptive keeper biases dive odds from this.
      */
     private final ShotHistory campaignShotMemory = new ShotHistory();
-    /** Per-level counts of where the keeper dove: left / center / right (index 0,1,2). Heatmap. */
-    private final int[] keeperDivesThisLevel = new int[3];
     /** Player pressure 0..1. Rises on saves/misses, falls on goals, reset per level. */
     private double pressure;
     /** Sum of goals scored across all completed levels in the current campaign run. */
@@ -110,9 +105,6 @@ public class Game {
         hud.setCurrentRound(currentRound);
         hud.setLevel(currentLevel, GameConstants.LEVEL_COUNT);
 
-        // Per-level heatmap only; L3 keeper uses {@link #campaignShotMemory} across all levels.
-        shotHistory.clear();
-        Arrays.fill(keeperDivesThisLevel, 0);
         pressure = 0.0;
 
         // Per-level keeper tuning: reach multiplier is level-driven, probabilities only get
@@ -383,22 +375,9 @@ public class Game {
         }
         pressure = Math.max(0.0, Math.min(1.0, pressure));
 
-        shotHistory.record(lastShotAimX, countsAsGoal);
-        campaignShotMemory.record(lastShotAimX, countsAsGoal);
-
-        int dive = goalkeeper.getCurrentDiveDirection();
-        int z = dive == -1 ? 0 : dive == 0 ? 1 : 2;
-        keeperDivesThisLevel[z]++;
+        campaignShotMemory.record(lastShotAimX);
 
         hud.showResultMessage(lastResultMessage, 2.0);
-    }
-
-    public double getPressure() {
-        return pressure;
-    }
-
-    public ShotHistory getShotHistory() {
-        return shotHistory;
     }
 
     private static boolean wasAimedInsideGoalFrame(double aimX, double aimY) {
@@ -472,28 +451,26 @@ public class Game {
         if (gameState.equals(GameConstants.STATE_MENU)) {
             renderMenu(gc);
         } else if (gameState.equals(GameConstants.STATE_PLAYING)) {
-            gc.clearRect(0, 0, w, h);
-            hud.render(gc);
-            if ("AIM".equals(gamePhase)) {
-                renderKeeperDiveHeatmap(gc);
-            }
+            clearAndDrawHud(gc, w, h);
         } else if (gameState.equals(GameConstants.STATE_LEVEL_COMPLETE)) {
-            gc.clearRect(0, 0, w, h);
-            hud.render(gc);
+            clearAndDrawHud(gc, w, h);
             renderLevelBanner(gc, "LEVEL " + currentLevel + " COMPLETE!",
                     Color.web(GameConstants.HUD_SUCCESS),
                     "Next: " + GameConstants.levelDescription(currentLevel + 1));
         } else if (gameState.equals(GameConstants.STATE_LEVEL_FAILED)) {
-            gc.clearRect(0, 0, w, h);
-            hud.render(gc);
+            clearAndDrawHud(gc, w, h);
             renderLevelBanner(gc, "LEVEL " + currentLevel + " FAILED",
                     Color.web("#ff6666"),
                     "SPACE retry   Q / ESC main menu");
         } else if (gameState.equals(GameConstants.STATE_RESULT)) {
-            gc.clearRect(0, 0, w, h);
-            hud.render(gc);
+            clearAndDrawHud(gc, w, h);
             renderResultScreen(gc);
         }
+    }
+
+    private void clearAndDrawHud(GraphicsContext gc, double w, double h) {
+        gc.clearRect(0, 0, w, h);
+        hud.render(gc);
     }
 
     public Ball getBall() {
@@ -619,53 +596,6 @@ public class Game {
                 GameConstants.SCREEN_HEIGHT / 2.0 + 165);
     }
 
-    /**
-     * Keeper dive distribution this level (left / center / right). Opaque panel so it stays
-     * readable over the 3D pitch; semi-transparent fills blended into grass and disappeared.
-     */
-    private void renderKeeperDiveHeatmap(GraphicsContext gc) {
-        int boxW = 116;
-        int boxH = 40;
-        int gap = 8;
-        int totalW = boxW * 3 + gap * 2;
-        int startX = (GameConstants.SCREEN_WIDTH - totalW) / 2;
-        int y = 118;
-
-        int total = keeperDivesThisLevel[0] + keeperDivesThisLevel[1] + keeperDivesThisLevel[2];
-        String[] labels = { "LEFT", "CENTER", "RIGHT" };
-
-        gc.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
-        gc.setFill(Color.rgb(22, 28, 34, 0.94));
-        gc.fillRoundRect(startX - 14, y - 22, totalW + 28, boxH + 46, 10, 10);
-
-        gc.setFont(javafx.scene.text.Font.font("Arial", 12));
-        gc.setFill(Color.web("#e8e8e8"));
-        gc.fillText("KEEPER DIVES (this level) — total " + total,
-                GameConstants.SCREEN_WIDTH / 2.0, y - 7);
-
-        int innerTop = y + 6;
-        for (int i = 0; i < 3; i++) {
-            int x = startX + i * (boxW + gap);
-            int dives = keeperDivesThisLevel[i];
-            double intensity = total == 0 ? 0.0 : (double) dives / total;
-            int r = (int) (55 + 200 * intensity);
-            int gv = (int) (55 + 25 * (1 - intensity));
-            int b = (int) (60 + 35 * (1 - intensity));
-            gc.setFill(Color.rgb(r, gv, b));
-            gc.fillRect(x, innerTop, boxW, boxH);
-            gc.setStroke(Color.web("#f0f0f0"));
-            gc.setLineWidth(1.5);
-            gc.strokeRect(x, innerTop, boxW, boxH);
-
-            gc.setFill(Color.WHITE);
-            gc.setFont(javafx.scene.text.Font.font("Arial", 12));
-            gc.fillText(labels[i], x + boxW / 2.0, innerTop + 18);
-            gc.setFont(javafx.scene.text.Font.font("Arial", 11));
-            gc.setFill(Color.web(GameConstants.HUD_ACCENT_SOFT));
-            gc.fillText(dives + " dive" + (dives == 1 ? "" : "s"), x + boxW / 2.0, innerTop + 34);
-        }
-    }
-
     /** Shared banner overlay used for LEVEL_COMPLETE and LEVEL_FAILED screens. */
     private void renderLevelBanner(GraphicsContext gc, String headline, Color headlineColor,
                                    String subtitle) {
@@ -697,10 +627,6 @@ public class Game {
 
     public String getGamePhase() {
         return gamePhase;
-    }
-
-    public int getCurrentLevel() {
-        return currentLevel;
     }
 
     public boolean isExitRequested() {

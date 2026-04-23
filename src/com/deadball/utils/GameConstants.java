@@ -95,8 +95,6 @@ public interface GameConstants {
     int ROUNDS_PER_LEVEL = 5;
     /** Campaign length; each level is a full shootout of {@link #ROUNDS_PER_LEVEL} rounds. */
     int LEVEL_COUNT = 3;
-    /** Backwards-compat alias used by HUD icons and older call sites. */
-    int MAX_ROUNDS = ROUNDS_PER_LEVEL;
     /** How long the LEVEL_COMPLETE banner is shown before advancing (seconds). */
     double LEVEL_TRANSITION_SECONDS = 2.5;
 

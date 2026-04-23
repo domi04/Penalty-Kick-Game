@@ -91,7 +91,7 @@ public class HUD {
         // Level + round indicator (top left)
         gc.setFont(Font.font("Arial", 16));
         gc.setTextAlign(TextAlignment.LEFT);
-        gc.setFill(Color.web(GameConstants.HUD_ACCENT));
+        gc.setFill(Color.WHITE);
         gc.fillText("Level " + currentLevel + " / " + levelCount, 20, 40);
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("Arial", 13));
@@ -107,7 +107,7 @@ public class HUD {
         drawRoundIcons(gc);
 
         gc.setFont(Font.font("Arial", 11));
-        gc.setFill(Color.web("#c8c8c8"));
+        gc.setFill(Color.web("#000000"));
         gc.setTextAlign(TextAlignment.CENTER);
         gc.fillText("←→↑↓ aim (miss wide/high)   SPACE shoot   Q / ESC quit",
                 GameConstants.SCREEN_WIDTH / 2.0, GameConstants.SCREEN_HEIGHT - 12);
@@ -140,7 +140,7 @@ public class HUD {
             barColor = Color.web("#FFAA00");
         }
         if (powerBarValue > 0.85) {
-            barColor = Color.web(GameConstants.HUD_ACCENT_SOFT);
+            barColor = Color.web("#FF2400");
         }
         
         gc.setFill(barColor);

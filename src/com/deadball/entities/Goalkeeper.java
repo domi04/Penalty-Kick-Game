@@ -1,12 +1,10 @@
 package com.deadball.entities;
 
-import javafx.scene.canvas.GraphicsContext;
 import com.deadball.utils.GameConstants;
 
 public class Goalkeeper extends Entity {
     private final double[] diveProbabilities; // [left, center, right], sums to 1
     private int currentDiveDirection; // -1 = left, 0 = center, 1 = right
-    private double diveAnimationTimer;
     /** Multiplies {@link GameConstants#KEEPER_SAVE_REACH_X} when computing a save. */
     private double reachMultiplier;
 
@@ -18,7 +16,6 @@ public class Goalkeeper extends Entity {
             GameConstants.KEEPER_RIGHT_PROBABILITY
         };
         this.currentDiveDirection = 0;
-        this.diveAnimationTimer = 0.0;
         this.reachMultiplier = 1.0;
     }
 
@@ -42,14 +39,6 @@ public class Goalkeeper extends Entity {
         this.reachMultiplier = Math.max(0.1, multiplier);
     }
 
-    public double getReachMultiplier() {
-        return reachMultiplier;
-    }
-
-    public double[] getDiveProbabilities() {
-        return new double[]{ diveProbabilities[0], diveProbabilities[1], diveProbabilities[2] };
-    }
-    
     public void decideDive() {
         double random = Math.random();
         if (random < diveProbabilities[0]) {
@@ -59,7 +48,6 @@ public class Goalkeeper extends Entity {
         } else {
             currentDiveDirection = 1;
         }
-        diveAnimationTimer = 0.5;
     }
     
     /**
@@ -84,7 +72,6 @@ public class Goalkeeper extends Entity {
     
     public void reset() {
         currentDiveDirection = 0;
-        diveAnimationTimer = 0.0;
     }
     
     public int getCurrentDiveDirection() {
@@ -92,14 +79,5 @@ public class Goalkeeper extends Entity {
     }
     
     @Override
-    public void update(double deltaTime) {
-        if (diveAnimationTimer > 0) {
-            diveAnimationTimer -= deltaTime;
-        }
-    }
-    
-    @Override
-    public void render(GraphicsContext gc) {
-        // Drawn by JavaFX 3D SubScene
-    }
+    public void update(double deltaTime) { }
 }
