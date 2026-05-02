@@ -385,11 +385,12 @@ public class GameScene3D {
         if (tex == null || tex.isError()) {
             tex = imgKeeperStand;
         }
-        if (tex != null && !tex.isError()) {
-            keeperMaterial.setDiffuseMap(tex);
-            keeperMaterial.setDiffuseColor(Color.WHITE);
-            layoutKeeperBillboard(tex);
+        if (tex == null || tex.isError()) {
+            return;
         }
+        keeperMaterial.setDiffuseMap(tex);
+        keeperMaterial.setDiffuseColor(Color.WHITE);
+        layoutKeeperBillboard(tex);
     }
 
     private static double worldX(double posX) {
@@ -485,7 +486,8 @@ public class GameScene3D {
             return;
         }
 
-        boolean aiming = GameConstants.STATE_PLAYING.equals(state) && "AIM".equals(game.getGamePhase());
+        boolean aiming = GameConstants.STATE_PLAYING.equals(state)
+                && GameConstants.PHASE_AIM.equals(game.getGamePhase());
         reticleGroup.setVisible(aiming);
         if (aiming) {
             double rx = worldX(game.getPlayer().getReticleX());

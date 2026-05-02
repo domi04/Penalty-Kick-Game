@@ -27,7 +27,6 @@ public class Main extends Application {
     private Game game;
     private GameScene3D gameScene3D;
     private Canvas hudCanvas;
-    private Scene scene;
     private double lastFrameTime;
     private Stage primaryStage;
 
@@ -62,7 +61,7 @@ public class Main extends Application {
 
         StackPane root = new StackPane(sub3D, hudCanvas);
 
-        scene = new Scene(root, GameConstants.SCREEN_WIDTH, GameConstants.SCREEN_HEIGHT);
+        Scene scene = new Scene(root, GameConstants.SCREEN_WIDTH, GameConstants.SCREEN_HEIGHT);
 
         // Capture phase so Q/ESC quit even when the HUD canvas has keyboard focus.
         scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {

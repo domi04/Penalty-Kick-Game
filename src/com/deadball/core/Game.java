@@ -50,7 +50,6 @@ public class Game {
     private double resultDisplayTimer;
     /** Between-level banner auto-advance timer (LEVEL_COMPLETE). */
     private double levelTransitionTimer;
-    private String lastResultMessage;
     /** Captured when the player shoots; straight paths can clip the net on the way to a wide aim. */
     private double lastShotAimX;
     private double lastShotAimY;
@@ -64,7 +63,7 @@ public class Game {
         this.keysPressed = new HashSet<>();
         this.spacePressedThisFrame = false;
         this.exitRequested = false;
-        this.gamePhase = "AIM";
+        this.gamePhase = GameConstants.PHASE_AIM;
 
         initializeEntities();
         highScore.load();
@@ -96,7 +95,7 @@ public class Game {
         aiScore = 0;
         currentRound = 1;
         gameState = GameConstants.STATE_PLAYING;
-        gamePhase = "AIM";
+        gamePhase = GameConstants.PHASE_AIM;
         resultDisplayTimer = 0.0;
         levelTransitionTimer = 0.0;
 
@@ -128,7 +127,7 @@ public class Game {
         ball.clearShotRay();
         ball.setInFlight(false);
         ball.setPosition(GameConstants.PENALTY_SPOT_X, GameConstants.PENALTY_SPOT_Y);
-        gamePhase = "AIM";
+        gamePhase = GameConstants.PHASE_AIM;
         resultDisplayTimer = 0.0;
     }
     
@@ -235,38 +234,28 @@ public class Game {
         goalkeeper.update(deltaTime);
         goal.update(deltaTime);
         hud.update(deltaTime);
-        
-        double moveH = 0.0;
-        if (keysPressed.contains(KeyCode.LEFT)) {
-            moveH -= 1.0;
-        }
-        if (keysPressed.contains(KeyCode.RIGHT)) {
-            moveH += 1.0;
-        }
-        double moveV = 0.0;
-        if (keysPressed.contains(KeyCode.UP)) {
-            moveV -= 1.0;
-        }
-        if (keysPressed.contains(KeyCode.DOWN)) {
-            moveV += 1.0;
-        }
+
+        double moveH = (keysPressed.contains(KeyCode.LEFT) ? -1.0 : 0)
+                + (keysPressed.contains(KeyCode.RIGHT) ? 1.0 : 0);
+        double moveV = (keysPressed.contains(KeyCode.UP) ? -1.0 : 0)
+                + (keysPressed.contains(KeyCode.DOWN) ? 1.0 : 0);
         player.setReticleMovement(moveH, moveV);
-        
+
         // Game phase logic
-        if (gamePhase.equals("AIM")) {
+        if (gamePhase.equals(GameConstants.PHASE_AIM)) {
             // In AIM phase, player moves reticle and power bar oscillates
             // When space is pressed, shoot immediately with current power
             if (spacePressedThisFrame) {
-                gamePhase = "SHOOT";
+                gamePhase = GameConstants.PHASE_SHOOT;
                 executeShot();
             }
-        } else if (gamePhase.equals("SHOOT")) {
+        } else if (gamePhase.equals(GameConstants.PHASE_SHOOT)) {
             if (!ball.isInFlight()) {
-                gamePhase = "RESULT";
+                gamePhase = GameConstants.PHASE_RESULT;
                 evaluateShot();
                 resultDisplayTimer = 2.0;
             }
-        } else if (gamePhase.equals("RESULT")) {
+        } else if (gamePhase.equals(GameConstants.PHASE_RESULT)) {
             resultDisplayTimer -= deltaTime;
             if (resultDisplayTimer <= 0) {
                 currentRound++;
@@ -323,50 +312,54 @@ public class Game {
         lastShotAimY = targetY;
         double power = player.getPowerLevel();
 
-        ball.launch(targetX, targetY, power, wasAimedInsideGoalFrame(targetX, targetY));
+        ball.launch(targetX, targetY, power, GameConstants.isInsideGoalFrame(targetX, targetY));
         sound.play(SoundManager.Clip.KICK);
 
-        // Adaptive keeper (L3): bias from every shot this campaign (L1 + L2 + earlier L3 rounds).
-        if (currentLevel >= 3 && campaignShotMemory.totalShots() > 0) {
-            double w = Math.min(1.0,
-                    campaignShotMemory.totalShots() / (double) GameConstants.KEEPER_ADAPTIVE_RAMP_SHOTS)
-                    * GameConstants.KEEPER_ADAPTIVE_BIAS;
-            double left = (1.0 - w) * GameConstants.KEEPER_LEFT_PROBABILITY
-                    + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.LEFT);
-            double center = (1.0 - w) * GameConstants.KEEPER_CENTER_PROBABILITY
-                    + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.CENTER);
-            double right = (1.0 - w) * GameConstants.KEEPER_RIGHT_PROBABILITY
-                    + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.RIGHT);
-            goalkeeper.setDiveProbabilities(left, center, right);
-        } else {
-            goalkeeper.resetProbabilitiesToBaseline();
-        }
+        applyKeeperDiveProbabilitiesForCurrentLevel();
 
         goalkeeper.decideDive();
         
         hud.showResultMessage("", 0.0);
     }
     
+    private void applyKeeperDiveProbabilitiesForCurrentLevel() {
+        if (currentLevel >= 3 && campaignShotMemory.totalShots() > 0) {
+            double w = Math.min(1.0,
+                    campaignShotMemory.totalShots() / (double) GameConstants.KEEPER_ADAPTIVE_RAMP_SHOTS)
+                    * GameConstants.KEEPER_ADAPTIVE_BIAS;
+            goalkeeper.setDiveProbabilities(
+                    (1.0 - w) * GameConstants.KEEPER_LEFT_PROBABILITY
+                            + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.LEFT),
+                    (1.0 - w) * GameConstants.KEEPER_CENTER_PROBABILITY
+                            + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.CENTER),
+                    (1.0 - w) * GameConstants.KEEPER_RIGHT_PROBABILITY
+                            + w * campaignShotMemory.shareOfShots(ShotHistory.Zone.RIGHT));
+        } else {
+            goalkeeper.resetProbabilitiesToBaseline();
+        }
+    }
+
     private void evaluateShot() {
         boolean ballInGoal = goal.checkBallInGoal(ball);
-        boolean aimInsideGoal = wasAimedInsideGoalFrame();
+        boolean aimInsideGoal = GameConstants.isInsideGoalFrame(lastShotAimX, lastShotAimY);
         boolean keeperSaved = ballInGoal && goalkeeper.isBlocking(ball);
         boolean countsAsGoal = ballInGoal && aimInsideGoal && !keeperSaved;
 
+        String message;
         if (countsAsGoal) {
             playerScore++;
-            lastResultMessage = "GOAL!";
+            message = "GOAL!";
             goal.triggerFlash();
             hud.recordRoundResult(true);
             pressure += GameConstants.PRESSURE_ON_GOAL;
             sound.play(SoundManager.Clip.GOAL);
         } else {
             if (keeperSaved) {
-                lastResultMessage = "SAVED!";
+                message = "SAVED!";
                 pressure += GameConstants.PRESSURE_ON_SAVE;
                 sound.play(SoundManager.Clip.SAVE);
             } else {
-                lastResultMessage = classifyMiss(ball);
+                message = classifyMiss(ball);
                 pressure += GameConstants.PRESSURE_ON_MISS;
                 sound.play(SoundManager.Clip.MISS);
             }
@@ -377,16 +370,7 @@ public class Game {
 
         campaignShotMemory.record(lastShotAimX);
 
-        hud.showResultMessage(lastResultMessage, 2.0);
-    }
-
-    private static boolean wasAimedInsideGoalFrame(double aimX, double aimY) {
-        return aimX >= GameConstants.GOAL_LEFT && aimX <= GameConstants.GOAL_RIGHT
-                && aimY >= GameConstants.GOAL_TOP && aimY <= GameConstants.GOAL_BOTTOM;
-    }
-
-    private boolean wasAimedInsideGoalFrame() {
-        return wasAimedInsideGoalFrame(lastShotAimX, lastShotAimY);
+        hud.showResultMessage(message, 2.0);
     }
 
     private static boolean hitWoodwork(Ball ball) {
@@ -420,18 +404,13 @@ public class Game {
 
         boolean wideOfPosts = bx < gl - 20 || bx > gr + 20;
         if (by < gt) {
-            if (wideOfPosts) {
-                return "WIDE!";
-            }
-            return "OVER THE BAR!";
+            return wideOfPosts ? "WIDE!" : "OVER THE BAR!";
         }
         if (hitWoodwork(ball)) {
             return "POST!";
         }
-        if (wideOfPosts) {
-            if (by >= gt - 40 && by <= gb + 45) {
-                return "WIDE!";
-            }
+        if (wideOfPosts && by >= gt - 40 && by <= gb + 45) {
+            return "WIDE!";
         }
         if (by > gb + 12) {
             return "SHORT!";
@@ -490,7 +469,7 @@ public class Game {
     }
     
     private void renderMenu(GraphicsContext gc) {
-        gc.setFill(Color.web("#003300"));
+        gc.setFill(Color.web("#001F00"));
         gc.fillRect(0, 0, GameConstants.SCREEN_WIDTH, GameConstants.SCREEN_HEIGHT);
 
         // Title
@@ -510,7 +489,7 @@ public class Game {
                 GameConstants.SCREEN_WIDTH / 2.0, 230);
 
         gc.setFont(javafx.scene.text.Font.font("Arial", 14));
-        gc.setFill(Color.web("#aad59c"));
+        gc.setFill(Color.web("white"));
         double ly = 270;
         for (int i = 1; i <= GameConstants.LEVEL_COUNT; i++) {
             gc.fillText(GameConstants.levelDescription(i),
@@ -519,13 +498,13 @@ public class Game {
         }
 
         gc.setFont(javafx.scene.text.Font.font("Arial", 16));
-        gc.setFill(Color.web(GameConstants.HUD_ACCENT));
+        gc.setFill(Color.web(GameConstants.HUD_SUCCESS));
         gc.fillText("High Score: " + highScore.getBestCampaignGoals() + " goals (campaign)",
                 GameConstants.SCREEN_WIDTH / 2.0, ly + 10);
 
         // Instructions
         gc.setFont(javafx.scene.text.Font.font("Arial", 20));
-        gc.setFill(Color.LIGHTGREEN);
+        gc.setFill(Color.WHITE);
         gc.fillText("Press SPACE to Play", GameConstants.SCREEN_WIDTH / 2.0,
                    GameConstants.SCREEN_HEIGHT / 2.0);
         gc.fillText("Press Q to Quit", GameConstants.SCREEN_WIDTH / 2.0,
@@ -537,21 +516,21 @@ public class Game {
         double buttonWidth = 240;
         double buttonHeight = 44;
 
-        gc.setFill(Color.web("#1f6f3c"));
+        gc.setFill(Color.web("#59D98A"));
         gc.fillRoundRect(buttonX, playButtonY, buttonWidth, buttonHeight, 16, 16);
         gc.fillRoundRect(buttonX, exitButtonY, buttonWidth, buttonHeight, 16, 16);
-        gc.setStroke(Color.WHITE);
+        gc.setStroke(Color.BLACK);
         gc.setLineWidth(2);
         gc.strokeRoundRect(buttonX, playButtonY, buttonWidth, buttonHeight, 16, 16);
         gc.strokeRoundRect(buttonX, exitButtonY, buttonWidth, buttonHeight, 16, 16);
-        gc.setFill(Color.WHITE);
+        gc.setFill(Color.BLACK);
         gc.setFont(javafx.scene.text.Font.font("Arial", 22));
         gc.fillText("PLAY", GameConstants.SCREEN_WIDTH / 2.0, playButtonY + 29);
         gc.fillText("EXIT", GameConstants.SCREEN_WIDTH / 2.0, exitButtonY + 29);
     }
     
     private void renderResultScreen(GraphicsContext gc) {
-        gc.setFill(Color.web("#000000", 0.8));
+        gc.setFill(Color.web("#000000", 0.95));
         gc.fillRect(0, 0, GameConstants.SCREEN_WIDTH, GameConstants.SCREEN_HEIGHT);
 
         gc.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
@@ -599,7 +578,7 @@ public class Game {
     /** Shared banner overlay used for LEVEL_COMPLETE and LEVEL_FAILED screens. */
     private void renderLevelBanner(GraphicsContext gc, String headline, Color headlineColor,
                                    String subtitle) {
-        gc.setFill(Color.web("#000000", 0.7));
+        gc.setFill(Color.web("#000000", 0.95));
         gc.fillRect(0, GameConstants.SCREEN_HEIGHT / 2.0 - 110,
                 GameConstants.SCREEN_WIDTH, 220);
 

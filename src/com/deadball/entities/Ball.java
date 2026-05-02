@@ -102,10 +102,7 @@ public class Ball extends Entity {
     }
     
     public boolean isInGoal() {
-        return posX >= GameConstants.GOAL_LEFT && 
-               posX <= GameConstants.GOAL_RIGHT &&
-               posY >= GameConstants.GOAL_TOP && 
-               posY <= GameConstants.GOAL_BOTTOM;
+        return GameConstants.isInsideGoalFrame(posX, posY);
     }
     
     @Override

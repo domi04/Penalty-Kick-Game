@@ -74,27 +74,26 @@ public class HUD {
             resultMessageTimer -= deltaTime;
         }
     }
-    
+
     public void render(GraphicsContext gc) {
         // Score display (top center)
-        gc.setFill(Color.WHITE);
+        gc.setFill(Color.BLACK);
         gc.setFont(Font.font("Arial", 32));
         gc.setTextAlign(TextAlignment.CENTER);
         String scoreText = playerScore + " - " + aiScore;
         gc.fillText(scoreText, GameConstants.SCREEN_WIDTH / 2.0, 50);
         
         // Player/AI labels
-        gc.setFont(Font.font("Arial", 14));
-        gc.fillText("You", GameConstants.SCREEN_WIDTH / 2.0 - 40, 35);
-        gc.fillText("AI", GameConstants.SCREEN_WIDTH / 2.0 + 40, 35);
+        gc.setFont(Font.font("Arial", 20));
+        gc.fillText("You", GameConstants.SCREEN_WIDTH / 2.0 - 56, 35);
+        gc.fillText("AI", GameConstants.SCREEN_WIDTH / 2.0 + 50, 35);
         
         // Level + round indicator (top left)
-        gc.setFont(Font.font("Arial", 16));
+        gc.setFont(Font.font("Arial", 20));
         gc.setTextAlign(TextAlignment.LEFT);
-        gc.setFill(Color.WHITE);
+        gc.setFill(Color.BLACK);
         gc.fillText("Level " + currentLevel + " / " + levelCount, 20, 40);
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Arial", 13));
+        gc.setFont(Font.font("Arial", 18));
         gc.fillText("Round: " + currentRound + " / " + GameConstants.ROUNDS_PER_LEVEL, 20, 60);
         
         // Power bar (left edge)
@@ -151,8 +150,8 @@ public class HUD {
         gc.setLineWidth(2);
         double sweetSpotStart = barY + barHeight * 0.2;
         gc.strokeLine(barX, sweetSpotStart, barX + barWidth, sweetSpotStart);
-        gc.setFill(Color.web(GameConstants.HUD_ACCENT_SOFT));
-        gc.setFont(Font.font("Arial", 8));
+        gc.setFill(Color.BLACK);
+        gc.setFont(Font.font("Arial", 14));
         gc.setTextAlign(TextAlignment.LEFT);
         gc.fillText("Sweet Spot", barX + 34, sweetSpotStart - 5);
     }
@@ -181,12 +180,12 @@ public class HUD {
         gc.setFill(fill);
         gc.fillRect(barX + 2, barY + barHeight - fillHeight, barWidth - 4, fillHeight);
 
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Arial", 10));
+        gc.setFill(Color.BLACK);
+        gc.setFont(Font.font("Arial", 14));
         gc.setTextAlign(TextAlignment.RIGHT);
         gc.fillText("PRESSURE", barX - 6, barY + 12);
-        gc.setFont(Font.font("Arial", 9));
-        gc.setFill(Color.web("#c8c8c8"));
+        gc.setFont(Font.font("Arial", 12));
+        gc.setFill(Color.BLACK);
         gc.fillText(String.format("%d%%", (int) Math.round(pressure * 100)), barX - 6, barY + 26);
     }
 
@@ -206,12 +205,12 @@ public class HUD {
                 // Completed round
                 if (roundResults[i]) {
                     gc.setFill(Color.GREEN);
-                    gc.fillOval(x - 12, iconY - 12, 24, 24);
+                    gc.fillOval(x - 12, iconY - 10, 24, 24);
                     gc.setFill(Color.WHITE);
                     gc.fillText("✓", x, iconY + 7);
                 } else {
                     gc.setFill(Color.RED);
-                    gc.fillOval(x - 12, iconY - 12, 24, 24);
+                    gc.fillOval(x - 12, iconY - 10, 24, 24);
                     gc.setFill(Color.WHITE);
                     gc.fillText("✗", x, iconY + 7);
                 }
@@ -219,13 +218,13 @@ public class HUD {
                 // Current round
                 gc.setStroke(Color.web(GameConstants.HUD_ACCENT));
                 gc.setLineWidth(3);
-                gc.strokeOval(x - 12, iconY - 12, 24, 24);
+                gc.strokeOval(x - 12, iconY - 10, 24, 24);
                 gc.setFill(Color.WHITE);
                 gc.fillText((i + 1) + "", x, iconY + 7);
             } else {
                 // Future round
                 gc.setFill(Color.web("#666666"));
-                gc.fillOval(x - 12, iconY - 12, 24, 24);
+                gc.fillOval(x - 12, iconY - 10, 24, 24);
                 gc.setFill(Color.WHITE);
                 gc.fillText((i + 1) + "", x, iconY + 7);
             }
@@ -235,31 +234,23 @@ public class HUD {
     private void drawResultMessage(GraphicsContext gc) {
         gc.setFont(Font.font("Arial", 48));
         gc.setTextAlign(TextAlignment.CENTER);
-        
-        // Background semi-transparent
-        gc.setFill(Color.web("#000000", 0.7));
-        gc.fillRect(0, GameConstants.SCREEN_HEIGHT / 2 - 60,
-                   GameConstants.SCREEN_WIDTH, 120);
-        
-        if (resultMessage.contains("GOAL")) {
-            gc.setFill(Color.web(GameConstants.HUD_SUCCESS));
-        } else if (resultMessage.contains("SAVED")) {
-            gc.setFill(Color.web("#6ec8ff"));
-        } else if (resultMessage.contains("POST")) {
-            gc.setFill(Color.web("#ffaa44"));
-        } else if (resultMessage.contains("OVER")) {
-            gc.setFill(Color.web("#ffcc66"));
-        } else if (resultMessage.contains("WIDE")) {
-            gc.setFill(Color.web("#ff6666"));
-        } else if (resultMessage.contains("SHORT")) {
-            gc.setFill(Color.web("#cc88aa"));
-        } else {
-            gc.setFill(Color.RED);
-        }
 
+        gc.setFill(Color.web("#000000", 0.9));
+        gc.fillRect(0, GameConstants.SCREEN_HEIGHT / 2 - 60,
+                GameConstants.SCREEN_WIDTH, 120);
+
+        Color textColor;
+        if (resultMessage.contains("GOAL")) {
+            textColor = Color.web(GameConstants.HUD_SUCCESS);
+        } else if (resultMessage.contains("SAVED")) {
+            textColor = Color.web("#6ec8ff");
+        } else {
+            textColor = Color.web("#ff6666");
+        }
+        gc.setFill(textColor);
         gc.fillText(resultMessage,
-                   GameConstants.SCREEN_WIDTH / 2.0,
-                   GameConstants.SCREEN_HEIGHT / 2.0 + 20);
+                GameConstants.SCREEN_WIDTH / 2.0,
+                GameConstants.SCREEN_HEIGHT / 2.0 + 20);
     }
     
     public void reset() {

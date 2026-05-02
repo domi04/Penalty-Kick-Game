@@ -12,13 +12,7 @@ public class Goal {
     }
     
     public boolean checkBallInGoal(Ball ball) {
-        double ballX = ball.getPosX();
-        double ballY = ball.getPosY();
-        
-        return ballX >= GameConstants.GOAL_LEFT &&
-               ballX <= GameConstants.GOAL_RIGHT &&
-               ballY >= GameConstants.GOAL_TOP &&
-               ballY <= GameConstants.GOAL_BOTTOM;
+        return GameConstants.isInsideGoalFrame(ball.getPosX(), ball.getPosY());
     }
     
     public void triggerFlash() {
